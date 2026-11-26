@@ -2,6 +2,7 @@ const universityStore = require("../data/universityStore");
 
 // Mã lỗi PostgreSQL khi thêm giá trị trùng ở cột UNIQUE để mình biết lỗi gì
 const UNIQUE_VIOLATION = "23505";
+const FOREIGN_KEY_VIOLATION = "23503";
 
 // Lấy và làm sạch dữ liệu gửi lên; thiếu tên hoặc mã thì trả về lỗi
 const parseUniversityInput = (body) => {
@@ -95,6 +96,11 @@ const deleteUniversity = async (req, res) => {
     }
     res.status(204).end(); // 204 = xoá xong, không có gì để trả về hết
   } catch (error) {
+    if (error.code === FOREIGN_KEY_VIOLATION) {
+      return res
+        .status(409)
+        .json({ message: "Trường vẫn còn tài khoản, xoá tài khoản trước" });
+    }
     console.error(error);
     res.status(500).json({ message: "Lỗi server khi xoá trường" });
   }

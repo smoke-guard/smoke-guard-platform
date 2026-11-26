@@ -3,6 +3,7 @@ require("dotenv").config();
 const express = require("express");
 const healthRoutes = require("./routes/healthRoutes");
 const universityRoutes = require("./routes/universityRoutes");
+const userRoutes = require("./routes/userRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -12,6 +13,7 @@ app.use(express.urlencoded({ extended: true })); // đọc dữ liệu form HTML
 
 app.use("/health", healthRoutes);
 app.use("/universities", universityRoutes);
+app.use("/users", userRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server đang chạy tại http://localhost:${PORT}`);
