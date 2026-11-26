@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmokeGuard - Monitoring Dashboard</title>
+  <!-- Nhúng thư viện Socket.io Client -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #f0f2f5;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+
+    h2 {
+      margin-top: 0;
+      color: #1a1a1a;
+    }
+
+    /* Popup Cảnh báo khói khẩn cấp */
+    .alert-banner {
+      display: none;
+      background: #ff4d4f;
+      color: white;
+      padding: 15px 20px;
+      border-radius: 8px;
+      font-weight: bold;
+      font-size: 18px;
+      margin-bottom: 20px;
+      animation: pulse 1s infinite alternate;
+    }
+
+    @keyframes pulse {
+      from {
+        opacity: 0.9;
+      }
+      to {
+        opacity: 1;
+        transform: scale(1.01);
+      }
+    }
+
+    /* Form & Input */
+    .form-group {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    input {
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      flex: 1;
+    }
+
+    button {
+      padding: 10px 20px;
+      background: #1890ff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    button:hover {
+      background: #40a9ff;
+    }
+
+    /* Bảng dữ liệu */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+
+    th,
+    td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #e8e8e8;
+    }
+
+    th {
+      background: #fafafa;
+      color: #595959;
+    }
+
+    .status-alert {
+      background: #fff1f0;
+      color: #cf1322;
+      font-weight: bold;
+    }
+
+    .status-normal {
+      color: #52c41a;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>🚨 SmokeGuard - Hệ thống Giám sát & Cảnh báo Khói Real-time</h1>
+
+    <!-- Banner Báo động đỏ -->
+    <div id="alertBanner" class="alert-banner">
+      ⚠️ CẢNH BÁO TỨC THỜI: Phát hiện nồng độ khói vượt ngưỡng an toàn!
+    </div>
+
+    <!-- Card 1: Đăng nhập Cán bộ -->
+    <div class="card">
+      <h2>🔑 1. Đăng nhập Cán bộ Quản lý</h2>
+      <div class="form-group">
+        <input type="email" id="emailInput" value="canbo@sgu.edu.vn" placeholder="Email cán bộ">
+        <input type="password" id="passwordInput" value="123" placeholder="Mật khẩu">
+        <button onclick="handleLogin()">Đăng nhập</button>
+      </div>
+      <p id="loginStatus" style="margin-top: 10px; font-weight: bold;"></p>
+    </div>
+
+    <!-- Card 2: Danh sách Trạm Cảm biến -->
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h2>📡 2. Danh sách Trạm cảm biến (API Protected)</h2>
+        <button onclick="fetchDevices()" style="background: #52c41a;">Tải danh sách</button>
+      </div>
+      <div id="devicesContainer" style="margin-top: 10px;">Chưa tải dữ liệu...</div>
+    </div>
+
+    <!-- Card 3: Nhật ký Cảnh báo Real-time -->
+    <div class="card">
+      <h2>📋 3. Lịch sử Cảnh báo Khói (Socket.io Stream)</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Thời gian</th>
+            <th>Mã Trạm</th>
+            <th>Nồng độ Khói</th>
+            <th>Khí Gas</th>
+            <th>Trạng thái</th>
+          </tr>
+        </thead>
+        <tbody id="logTableBody">
+          <tr>
+            <td colspan="5" style="text-align: center; color: #8c8c8c;">Chờ tín hiệu từ trạm cảm biến...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    let jwtToken = '';
+
+    // 1. Hàm Xử lý Đăng nhập
+    async function handleLogin() {
+      const email = document.getElementById('emailInput').value;
+      const password = document.getElementById('passwordInput').value;
+      const statusEl = document.getElementById('loginStatus');
+
+      try {
+        const response = await fetch('http://localhost:5000/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const result = await response.json();
+
+        if (result.success) {
+          jwtToken = result.token;
+          statusEl.style.color = '#52c41a';
+          statusEl.innerText = `✅ Đăng nhập thành công! Token: ${jwtToken.substring(0, 25)}...`;
+        } else {
+          statusEl.style.color = '#ff4d4f';
+          statusEl.innerText = `❌ Lỗi: ${result.message}`;
+        }
+      } catch (err) {
+        statusEl.style.color = '#ff4d4f';
+        statusEl.innerText = '❌ Không thể kết nối tới Server Express (http://localhost:5000)';
+      }
+    }
+
+    // 2. Hàm Lấy Danh sách Thiết bị (Truyền Header Token)
+    async function fetchDevices() {
+      if (!jwtToken) {
+        alert('Vui lòng đăng nhập để lấy Token trước!');
+        return;
+      }
+
+      try {
+        const response = await fetch('http://localhost:5000/api/devices', {
+          headers: { 'Authorization': `Bearer ${jwtToken}` }
+        });
+        const result = await response.json();
+
+        if (result.success) {
+          const listHtml = result.data.map(dev => `
+            <div style="padding: 8px; border-bottom: 1px solid #eee;">
+              <b>${dev.name}</b> (${dev.device_code}) - Vị trí: <i>${dev.location_description}</i>
+            </div>
+          `).join('');
+          document.getElementById('devicesContainer').innerHTML = listHtml;
+        }
+      } catch (err) {
+        alert('Lỗi tải danh sách thiết bị!');
+      }
+    }
+
+    // 3. Kết nối WebSocket Socket.io nhận tín hiệu Real-time
+    const socket = io('http://localhost:5000');
+
+    socket.on('connect', () => {
+      console.log('📡 Đã kết nối kênh WebSocket Real-time!');
+    });
+
+    socket.on('new_smoke_alert', (payload) => {
+      console.log('🚨 Nhận dữ liệu Cảnh báo:', payload);
+      const data = payload.data || {};
+      const isAlert = data.status === 'ALERT';
+      const deviceCode = data.device_code || 'DEV_A_001';
+
+      // Banner đỏ khẩn cấp: chỉ hiển thị khi trạng thái là ALERT
+      const banner = document.getElementById('alertBanner');
+      if (isAlert) {
+        banner.style.display = 'block';
+        banner.innerHTML = `🚨 <b>${payload.message || 'Cảnh báo vượt ngưỡng khói!'}</b> | Khói: <b>${data.smoke_level} ppm</b> | Khí Gas: <b>${data.gas_level} ppm</b>`;
+      } else {
+        banner.style.display = 'none';
+      }
+
+      // Thêm dòng vào bảng nhật ký theo đúng trạng thái NORMAL / ALERT
+      const tableBody = document.getElementById('logTableBody');
+      const rowClass = isAlert ? 'status-alert' : 'status-normal';
+      const statusText = isAlert ? '🚨 ALERT' : '✅ NORMAL';
+
+      const newRow = `
+        <tr class="${rowClass}">
+          <td>${new Date().toLocaleTimeString()}</td>
+          <td>${deviceCode}</td>
+          <td>${data.smoke_level} ppm</td>
+          <td>${data.gas_level} ppm</td>
+          <td>${statusText}</td>
+        </tr>
+      `;
+
+      if (tableBody.innerHTML.includes('Chờ tín hiệu')) {
+        tableBody.innerHTML = newRow;
+      } else {
+        tableBody.innerHTML = newRow + tableBody.innerHTML;
+      }
+    });
+  </script>
+
+</body>
+</html>
