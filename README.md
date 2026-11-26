@@ -15,3 +15,5 @@ Web platform của SmokeGuard: Node.js + Express + PostgreSQL + EJS.
    npm run dev
    ```
 4. Mở http://localhost:3000/health, thấy `"status": "ok"` là chạy được
+
+\*admin là tài khoản của đội ngũ cung cấp, không thuộc trường, tạo bằng npm run create-admin"
